@@ -1,32 +1,37 @@
 """
-moodboard.py — URL helpers for Scriptoria moodboard generation.
-Constructs Pollinations.ai image URLs based on scene, tone, and act.
-No HTTP requests are made here; URL construction only.
+moodboard.py — Pollinations.ai URL builder for Scriptoria visual moodboards.
+No API key required — Pollinations is free and keyless.
 """
-
 import urllib.parse
 import logging
 
 logger: logging.Logger = logging.getLogger(__name__)
 
+_ACT_MOODS: dict[int, str] = {
+    1: "establish, opening, introduce, golden hour",
+    2: "escalate, tension, conflict, dramatic",
+    3: "resolve, climax, conclusion, powerful",
+}
+
+_ACT_LABELS: dict[int, str] = {
+    1: "ACT I — ESTABLISH / OPENING",
+    2: "ACT II — ESCALATE / CONFLICT",
+    3: "ACT III — RESOLVE / CLIMAX",
+}
+
 
 def build_moodboard_url(scene_description: str, tone: int, act: int) -> str:
-    """Constructs a Pollinations.ai URL for cinematic image generation.
+    """Build a Pollinations.ai image URL based on act and tone.
 
     Args:
-        scene_description: Short textual description of the scene.
-        tone: Integer 0–100 representing tonal style (0 = vibrant Bollywood,
-              100 = cold minimal Nolan-style).
-        act: Script act number (1, 2, or 3).
+        scene_description: Short description of the scene or story idea (first 100 chars used).
+        tone: Integer 0–100. 0 = mass commercial Bollywood, 100 = arthouse minimal.
+        act: Integer 1, 2, or 3 representing the story act.
 
     Returns:
-        A fully-encoded Pollinations.ai image URL string.
+        Full Pollinations.ai image URL ready for <img> src.
     """
-    act_moods: dict[int, str] = {
-        1: "establish opening introduce golden hour",
-        2: "escalate tension conflict dramatic",
-        3: "resolve climax conclusion powerful",
-    }
+    act_mood: str = _ACT_MOODS.get(act, "cinematic")
 
     if tone <= 30:
         style: str = (
@@ -44,28 +49,21 @@ def build_moodboard_url(scene_description: str, tone: int, act: int) -> str:
             "shallow depth of field"
         )
 
-    prompt: str = (
-        f"{scene_description}, {act_moods.get(act, 'cinematic')}, "
-        f"{style}, film still, 4K, high quality"
-    )
+    prompt: str = f"{scene_description}, {act_mood}, {style}, film still, 4K, cinematic"
     encoded: str = urllib.parse.quote(prompt)
     url: str = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=576&nologo=true"
-    logger.debug("Built moodboard URL for act=%d tone=%d", act, tone)
+
+    logger.info("build_moodboard_url: act=%d tone=%d", act, tone)
     return url
 
 
 def build_caption(act: int) -> str:
-    """Returns the display caption string for a given act number.
+    """Build a human-readable caption for a moodboard act card.
 
     Args:
-        act: Act number (1, 2, or 3).
+        act: Integer 1, 2, or 3.
 
     Returns:
-        Human-readable act caption string.
+        Caption string, e.g. 'ACT I — ESTABLISH / OPENING'.
     """
-    captions: dict[int, str] = {
-        1: "ACT I — ESTABLISH / OPENING",
-        2: "ACT II — ESCALATE / CONFLICT",
-        3: "ACT III — RESOLVE / CLIMAX",
-    }
-    return captions.get(act, f"ACT {act}")
+    return _ACT_LABELS.get(act, f"ACT {act} — VISUAL DIRECTION")
