@@ -33,11 +33,18 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup() -> None:
-    """Initialise the database on application startup."""
+    """Initialise the database and seed ChromaDB RAG corpus on startup."""
     try:
         db.init_db()
     except Exception as exc:
         logger.error("Failed to init DB: %s", exc)
+
+    try:
+        from rag.load_scripts import load_all_scripts
+        load_all_scripts()
+        logger.info("startup: RAG corpus loaded")
+    except Exception as rag_exc:
+        logger.warning("startup: RAG seeding failed (non-fatal) — %s", rag_exc)
 
 
 # ---------------------------------------------------------------------------
