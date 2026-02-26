@@ -8,3 +8,4 @@ sentence-transformers
 reportlab
 python-docx
 sarvamai
+requests
