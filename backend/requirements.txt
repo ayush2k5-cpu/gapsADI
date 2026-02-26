@@ -7,4 +7,5 @@ chromadb
 sentence-transformers
 reportlab
 python-docx
-sarvam-client
+sarvamai
+requests
