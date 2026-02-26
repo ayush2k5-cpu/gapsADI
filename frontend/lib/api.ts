@@ -3,7 +3,8 @@ import {
     AnalyzeRequest, AnalyzeResponse,
     MoodboardRequest, MoodboardResponse,
     TranslateRequest, TranslateResponse,
-    ExportRequest
+    ExportRequest,
+    CBFCRequest, CBFCResponse
 } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -60,4 +61,14 @@ export const exportScreenplay = async (payload: ExportRequest): Promise<Blob> =>
     });
     if (!res.ok) throw new Error("Failed to export screenplay");
     return res.blob();
+};
+
+export const getCBFCRating = async (payload: CBFCRequest): Promise<CBFCResponse> => {
+    const res = await fetch(`${API_URL}/api/cbfc`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error("Failed to get CBFC rating");
+    return res.json();
 };

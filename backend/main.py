@@ -33,11 +33,18 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup() -> None:
-    """Initialise the database on application startup."""
+    """Initialise the database and seed ChromaDB RAG corpus on startup."""
     try:
         db.init_db()
     except Exception as exc:
         logger.error("Failed to init DB: %s", exc)
+
+    try:
+        from rag.load_scripts import load_all_scripts
+        load_all_scripts()
+        logger.info("startup: RAG corpus loaded")
+    except Exception as rag_exc:
+        logger.warning("startup: RAG seeding failed (non-fatal) — %s", rag_exc)
 
 
 # ---------------------------------------------------------------------------
@@ -530,3 +537,80 @@ async def export_pipeline(
         media_type=_MEDIA_TYPES[format],
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# ---------------------------------------------------------------------------
+# POST /api/cbfc
+# ---------------------------------------------------------------------------
+
+from cbfc_rating import estimate_cbfc_rating
+
+
+class CBFCRequest(BaseModel):
+    project_id: str
+
+
+@app.post("/api/cbfc")
+async def cbfc_pipeline(request: CBFCRequest) -> JSONResponse:
+    """Estimate CBFC certification rating for a screenplay.
+
+    Uses a pure rule-based keyword analysis — no API calls, no quota usage.
+    Scores 6 content categories: violence, sexual content, language,
+    drugs, sensitive themes, and horror.
+
+    Args:
+        request: CBFCRequest with project_id.
+
+    Returns:
+        JSONResponse with rating (U/UA/A), confidence, per-category breakdown,
+        human-readable reasons, and the official CBFC criteria text.
+        On any failure returns a safe UA default.
+    """
+    project: dict | None = None
+    try:
+        project = db.get_project(request.project_id)
+    except Exception as exc:
+        logger.error("cbfc_pipeline: DB lookup failed: %s", exc)
+
+    if project is None:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": True,
+                "code": "VALIDATION_ERROR",
+                "message": "Project not found",
+            },
+        )
+
+    screenplay: str = project.get("screenplay", "") or ""
+    genre: str = str(project.get("genre", ""))
+    tone: int = int(project.get("tone", 50))
+
+    try:
+        result: dict = estimate_cbfc_rating(screenplay, genre, tone)
+    except Exception as exc:
+        logger.error("cbfc_pipeline: rating failed: %s", exc)
+        result = {
+            "rating": "UA",
+            "confidence": "low",
+            "total_score": 0,
+            "breakdown": {
+                "violence": 0,
+                "sexual_content": 0,
+                "language": 0,
+                "drug_references": 0,
+                "sensitive_themes": 0,
+                "horror": 0,
+            },
+            "reasons": ["Analysis unavailable — defaulting to UA"],
+            "cbfc_criteria": "Parental guidance advisable — may contain content unsuitable for children under 12",
+            "scene_count": 0,
+        }
+
+    logger.info(
+        "cbfc_pipeline: project_id=%s rating=%s confidence=%s",
+        request.project_id,
+        result.get("rating"),
+        result.get("confidence"),
+    )
+    return JSONResponse(content=result)

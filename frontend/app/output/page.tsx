@@ -8,8 +8,9 @@ import CharactersTab from "@/components/CharactersTab";
 import MoodboardTab from "@/components/MoodboardTab";
 import MultilingualTab from "@/components/MultilingualTab";
 import { exportScreenplay } from "@/lib/api";
+import CBFCTab from "@/components/CBFCTab";
 
-const TABS = ["AD INTELLIGENCE", "CHARACTERS", "MOODBOARD", "MULTILINGUAL"];
+const TABS = ["AD INTELLIGENCE", "CHARACTERS", "MOODBOARD", "MULTILINGUAL", "CBFC RATING"];
 
 export default function OutputScreen() {
     const [activeTab, setActiveTab] = useState(0);
@@ -158,6 +159,10 @@ export default function OutputScreen() {
 
                         <div className={`absolute inset-0 transition-opacity duration-150 p-[24px] overflow-y-auto custom-scrollbar ${activeTab === 3 ? "opacity-100 z-10" : "opacity-0 -z-10"}`}>
                             <MultilingualTab originalScript={projectData.gen.screenplay} projectId={projectData.gen.project_id} />
+                        </div>
+
+                        <div className={`absolute inset-0 transition-opacity duration-150 p-[24px] overflow-y-auto custom-scrollbar ${activeTab === 4 ? "opacity-100 z-10" : "opacity-0 -z-10"}`}>
+                            <CBFCTab projectId={projectData.gen.project_id} />
                         </div>
                     </div>
                 </div>
