@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Clapperboard, Pencil } from "lucide-react";
+import { Clapperboard, Pencil, Download } from "lucide-react";
 import ScreenplayViewer from "@/components/ScreenplayViewer";
 import ADDashboard from "@/components/ADDashboard";
 import CharactersTab from "@/components/CharactersTab";
 import MoodboardTab from "@/components/MoodboardTab";
 import MultilingualTab from "@/components/MultilingualTab";
+import { exportScreenplay } from "@/lib/api";
 
 const TABS = ["AD INTELLIGENCE", "CHARACTERS", "MOODBOARD", "MULTILINGUAL"];
 
@@ -26,8 +27,27 @@ export default function OutputScreen() {
         }
     }, []);
 
-    const handleExport = (format: string) => {
-        alert(`Exporting ${format}... (to be wired to actual API)`);
+    const [exporting, setExporting] = useState<string | null>(null);
+
+    const handleExport = async (format: string) => {
+        if (!projectData?.gen?.project_id || exporting) return;
+        setExporting(format);
+        try {
+            const blob = await exportScreenplay({
+                project_id: projectData.gen.project_id,
+                format: format as "pdf" | "docx" | "txt",
+            });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `Scriptoria_${projectData.gen.project_id.slice(0, 8)}.${format}`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error("Export failed", err);
+        } finally {
+            setExporting(null);
+        }
     };
 
     if (!projectData) return <div className="min-h-screen bg-bg-base"></div>;
@@ -54,15 +74,25 @@ export default function OutputScreen() {
 
                 {/* Right */}
                 <div className="w-[30%] flex justify-end gap-[8px]">
-                    {["PDF", "DOCX", "TXT"].map((ext) => (
-                        <button
-                            key={ext}
-                            onClick={() => handleExport(ext.toLowerCase())}
-                            className="px-[16px] py-[10px] bg-bg-base border border-brand-white rounded-[4px] font-ui text-[12px] text-brand-white hover:bg-brand-white hover:text-brand-black transition-colors leading-none"
-                        >
-                            {ext}
-                        </button>
-                    ))}
+                    {(["PDF", "DOCX", "TXT"] as const).map((ext) => {
+                        const fmt = ext.toLowerCase();
+                        const isLoading = exporting === fmt;
+                        return (
+                            <button
+                                key={ext}
+                                onClick={() => handleExport(fmt)}
+                                disabled={!!exporting}
+                                className={`flex items-center gap-[6px] px-[16px] py-[10px] rounded-[4px] font-ui text-[12px] leading-none border transition-colors
+                                    ${isLoading
+                                        ? "bg-brand-white text-brand-black border-brand-white cursor-wait animate-pulse"
+                                        : "bg-bg-base border-brand-white text-brand-white hover:bg-brand-white hover:text-brand-black disabled:opacity-40"
+                                    }`}
+                            >
+                                <Download size={12} />
+                                {isLoading ? "..." : ext}
+                            </button>
+                        );
+                    })}
                 </div>
             </header>
 
