@@ -6,6 +6,7 @@ export default function MultilingualTab({ originalScript, projectId }: { origina
     const [viewState, setViewState] = useState<"ORIGINAL" | "TRANSLATED">("ORIGINAL");
     const [translatedScript, setTranslatedScript] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
+    const [translateError, setTranslateError] = useState<string | null>(null);
     const [targetLanguage, setTargetLanguage] = useState("Hindi");
 
     useEffect(() => {
@@ -23,12 +24,16 @@ export default function MultilingualTab({ originalScript, projectId }: { origina
         if (translatedScript) return;
 
         setIsLoading(true);
+        setTranslateError(null);
         try {
             const res = await translateScreenplay({ project_id: projectId, target_language: targetLanguage });
+            if (res.fallback) {
+                setTranslateError("Translation engine unavailable — showing original screenplay");
+            }
             setTranslatedScript(res.translated_screenplay);
         } catch (err) {
             console.error(err);
-            // Fallback or error ui logic
+            setTranslateError("Translation failed — please try again");
         } finally {
             setIsLoading(false);
         }
@@ -62,6 +67,13 @@ export default function MultilingualTab({ originalScript, projectId }: { origina
                 </div>
             </div>
 
+            {translateError && (
+                <div className="flex items-center gap-[10px] px-[14px] py-[10px] bg-pair1-dark border border-pair1-accent rounded-[4px] font-ui text-[12px] text-pair1-accent">
+                    <span>⚠</span>
+                    <span>{translateError}</span>
+                </div>
+            )}
+
             <div className="flex-1 overflow-y-auto relative custom-scrollbar">
                 {viewState === "ORIGINAL" ? (
                     <ScreenplayViewer script={originalScript} />
@@ -73,7 +85,9 @@ export default function MultilingualTab({ originalScript, projectId }: { origina
                             </div>
                         ) : translatedScript ? (
                             <ScreenplayViewer script={translatedScript} isTranslated={true} />
-                        ) : null}
+                        ) : !translateError ? null : (
+                            <ScreenplayViewer script={originalScript} />
+                        )}
                     </div>
                 )}
             </div>

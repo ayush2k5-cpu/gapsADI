@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Clapperboard, Pencil, Download } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Clapperboard, Pencil, Download, AlertTriangle } from "lucide-react";
 import ScreenplayViewer from "@/components/ScreenplayViewer";
 import ADDashboard from "@/components/ADDashboard";
 import CharactersTab from "@/components/CharactersTab";
@@ -13,26 +14,39 @@ import CBFCTab from "@/components/CBFCTab";
 const TABS = ["AD INTELLIGENCE", "CHARACTERS", "MOODBOARD", "MULTILINGUAL", "CBFC RATING"];
 
 export default function OutputScreen() {
+    const router = useRouter();
     const [activeTab, setActiveTab] = useState(0);
     const [projectName, setProjectName] = useState("Untitled Project");
     const [projectData, setProjectData] = useState<any>(null);
+    const [exporting, setExporting] = useState<string | null>(null);
+    const [exportError, setExportError] = useState<string | null>(null);
 
     useEffect(() => {
         // Load from local storage for hackathon MVP
-        const gen = JSON.parse(localStorage.getItem("scriptoria_response_gen") || "{}");
-        const analyzing = JSON.parse(localStorage.getItem("scriptoria_response_analyze") || "{}");
-        const moods = JSON.parse(localStorage.getItem("scriptoria_response_moods") || "[]");
-
-        if (gen.screenplay) {
-            setProjectData({ gen, analyzing, moods });
+        let gen: any = {};
+        let analyzing: any = {};
+        let moods: any[] = [];
+        try {
+            gen = JSON.parse(localStorage.getItem("scriptoria_response_gen") || "{}");
+            analyzing = JSON.parse(localStorage.getItem("scriptoria_response_analyze") || "{}");
+            moods = JSON.parse(localStorage.getItem("scriptoria_response_moods") || "[]");
+        } catch {
+            router.push("/");
+            return;
         }
-    }, []);
 
-    const [exporting, setExporting] = useState<string | null>(null);
+        if (!gen?.screenplay || !gen?.project_id) {
+            router.push("/");
+            return;
+        }
+
+        setProjectData({ gen, analyzing, moods });
+    }, [router]);
 
     const handleExport = async (format: string) => {
         if (!projectData?.gen?.project_id || exporting) return;
         setExporting(format);
+        setExportError(null);
         try {
             const blob = await exportScreenplay({
                 project_id: projectData.gen.project_id,
@@ -46,6 +60,8 @@ export default function OutputScreen() {
             URL.revokeObjectURL(url);
         } catch (err) {
             console.error("Export failed", err);
+            setExportError(`${format.toUpperCase()} export failed — try again`);
+            setTimeout(() => setExportError(null), 4000);
         } finally {
             setExporting(null);
         }
@@ -96,6 +112,14 @@ export default function OutputScreen() {
                     })}
                 </div>
             </header>
+
+            {/* Export error toast */}
+            {exportError && (
+                <div className="flex items-center gap-[8px] px-[16px] py-[10px] bg-pair1-dark border-b border-pair1-accent font-ui text-[12px] text-pair1-accent">
+                    <AlertTriangle size={14} />
+                    <span>{exportError}</span>
+                </div>
+            )}
 
             {/* Main Workspace */}
             <div className="flex flex-1 overflow-hidden">

@@ -1,6 +1,5 @@
 fastapi
 uvicorn
-google-generativeai
 langchain
 langchain-community
 chromadb
@@ -9,3 +8,4 @@ reportlab
 python-docx
 sarvamai
 requests
+python-dotenv

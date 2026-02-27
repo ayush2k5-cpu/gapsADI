@@ -40,9 +40,9 @@ def init_db() -> None:
         )
         conn.commit()
         conn.close()
-        logging.info("init_db: projects table ensured at %s", DB_PATH)
+        logger.info("init_db: projects table ensured at %s", DB_PATH)
     except sqlite3.Error as e:
-        logging.error("init_db failed: %s", e)
+        logger.error("init_db failed: %s", e)
         raise RuntimeError(f"DB_ERROR: {e}") from e
 
 
@@ -88,9 +88,9 @@ def save_project(
         )
         conn.commit()
         conn.close()
-        logging.info("save_project: saved project %s", project_id)
+        logger.info("save_project: saved project %s", project_id)
     except sqlite3.Error as e:
-        logging.error("save_project failed for %s: %s", project_id, e)
+        logger.error("save_project failed for %s: %s", project_id, e)
         raise RuntimeError(f"DB_ERROR: {e}") from e
 
 
@@ -117,7 +117,7 @@ def get_project(project_id: str) -> Optional[dict]:
         conn.close()
 
         if row is None:
-            logging.info("get_project: project %s not found", project_id)
+            logger.info("get_project: project %s not found", project_id)
             return None
 
         project = dict(row)
@@ -128,10 +128,10 @@ def get_project(project_id: str) -> Optional[dict]:
         if project.get("analysis"):
             project["analysis"] = json.loads(project["analysis"])
 
-        logging.info("get_project: retrieved project %s", project_id)
+        logger.info("get_project: retrieved project %s", project_id)
         return project
     except sqlite3.Error as e:
-        logging.error("get_project failed for %s: %s", project_id, e)
+        logger.error("get_project failed for %s: %s", project_id, e)
         raise RuntimeError(f"DB_ERROR: {e}") from e
 
 
@@ -151,9 +151,9 @@ def update_analysis(project_id: str, analysis: dict) -> None:
         )
         conn.commit()
         conn.close()
-        logging.info("update_analysis: updated analysis for project %s", project_id)
+        logger.info("update_analysis: updated analysis for project %s", project_id)
     except sqlite3.Error as e:
-        logging.error("update_analysis failed for %s: %s", project_id, e)
+        logger.error("update_analysis failed for %s: %s", project_id, e)
         raise RuntimeError(f"DB_ERROR: {e}") from e
 
 
@@ -177,11 +177,11 @@ def get_screenplay(project_id: str) -> Optional[str]:
         conn.close()
 
         if row is None:
-            logging.info("get_screenplay: project %s not found", project_id)
+            logger.info("get_screenplay: project %s not found", project_id)
             return None
 
-        logging.info("get_screenplay: retrieved screenplay for project %s", project_id)
+        logger.info("get_screenplay: retrieved screenplay for project %s", project_id)
         return row[0]
     except sqlite3.Error as e:
-        logging.error("get_screenplay failed for %s: %s", project_id, e)
+        logger.error("get_screenplay failed for %s: %s", project_id, e)
         raise RuntimeError(f"DB_ERROR: {e}") from e

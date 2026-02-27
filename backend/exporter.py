@@ -152,7 +152,7 @@ def export_pdf(screenplay: str, project_id: str) -> bytes:
                 canvas.setFont("Courier", 12)
                 canvas.drawRightString(
                     page_width - margin_right,
-                    page_height - margin_top + 0.3 * inch,
+                    page_height - 0.5 * inch,
                     str(page_num),
                 )
                 canvas.restoreState()
@@ -213,11 +213,13 @@ def export_pdf(screenplay: str, project_id: str) -> bytes:
             if kind == "blank":
                 story.append(Spacer(1, 6))
                 continue
-            # Escape special XML characters that ReportLab's Paragraph uses
+            # Escape all XML special characters ReportLab's Paragraph parser requires
             safe_text: str = (
                 text.replace("&", "&amp;")
                     .replace("<", "&lt;")
                     .replace(">", "&gt;")
+                    .replace('"', "&quot;")
+                    .replace("'", "&apos;")
             )
             if kind == "scene":
                 story.append(Paragraph(safe_text.upper(), style_scene))

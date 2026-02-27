@@ -13,7 +13,7 @@ from rag.chroma_setup import get_collection
 logger = logging.getLogger(__name__)
 
 
-def retrieve_context(story_idea: str, genre: str, n_results: int = 3) -> str:
+def retrieve_context(story_idea: str, genre: str, n_results: int = 1) -> str:
     """Query ChromaDB for scene patterns relevant to the given story idea and genre.
 
     Combines story_idea and genre into a single query string and retrieves

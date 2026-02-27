@@ -9,6 +9,9 @@ import logging
 import os
 import uuid
 
+from dotenv import load_dotenv
+load_dotenv()
+
 import db
 import ai_client
 import mock_data
@@ -127,14 +130,14 @@ async def generate_pipeline(request: GenerateRequest) -> JSONResponse:
     Returns:
         JSONResponse with project_id, screenplay, scene_count, characters.
     """
-    # Validate story_idea length
-    if not (10 <= len(request.story_idea) <= 1000):
+    # Validate story_idea length — keep short to respect token budget
+    if not (10 <= len(request.story_idea) <= 400):
         return JSONResponse(
             status_code=400,
             content={
                 "error": True,
                 "code": "VALIDATION_ERROR",
-                "message": "story_idea must be between 10 and 1000 characters",
+                "message": "story_idea must be between 10 and 400 characters",
             },
         )
 
@@ -147,24 +150,26 @@ async def generate_pipeline(request: GenerateRequest) -> JSONResponse:
     except Exception as rag_exc:
         logger.info("generate_pipeline: RAG unavailable — proceeding without context: %s", rag_exc)
 
-    # Build Gemini prompt
-    system_instruction = (
+    # Build prompt — capped at 5 scenes to stay within Groq token budget
+    system_instruction: str = (
         "You are a professional screenplay writer. Write in standard industry screenplay format."
     )
-    rag_section = ""
+    rag_section: str = ""
     if rag_context:
         rag_section = (
             f"\nReference these real screenplay scene patterns for structural guidance. "
-            f"Do not copy them — use for structure and pacing:\n{rag_context}\n"
+            f"Do not copy them — use for structure and pacing:\n{rag_context[:800]}\n"
         )
 
-    main_instruction = (
-        f"Write a {request.genre} screenplay ({request.language}) with exactly 20 scenes. "
+    main_instruction: str = (
+        f"Write a {request.genre} screenplay ({request.language}) with exactly 5 scenes. "
         f"Tone: {request.tone}/100 (0=mass commercial, 100=arthouse). "
         f"Story: {request.story_idea}\n\n"
-        f"Format:\nINT./EXT. LOCATION - TIME\n\nAction line.\n\n"
+        f"Format each scene exactly as:\nINT./EXT. LOCATION - TIME\n\nAction line.\n\n"
         f"                    CHARACTER\n          Dialogue.\n\n"
-        f"Return ONLY the screenplay text."
+        f"Include all 5 scene headings starting with INT. or EXT. "
+        f"Keep each scene concise — 1 action line, 2-3 dialogue exchanges. "
+        f"Return ONLY the screenplay text, no explanations."
     )
 
     prompt: str = f"{system_instruction}\n{rag_section}\n{main_instruction}"
@@ -177,8 +182,8 @@ async def generate_pipeline(request: GenerateRequest) -> JSONResponse:
                 status_code=429,
                 content={
                     "error": True,
-                    "code": "GEMINI_RATE_LIMIT",
-                    "message": str(exc),
+                    "code": "GROQ_RATE_LIMIT",
+                    "message": "All API keys are rate-limited — please wait a moment and try again",
                 },
             )
         return JSONResponse(
@@ -268,6 +273,12 @@ async def analyze_pipeline(request: AnalyzeRequest) -> JSONResponse:
     screenplay: str = project.get("screenplay", "") or ""
     characters: list = project.get("characters") or []
 
+    # Return cached analysis if already computed — saves an API call
+    cached_analysis: dict | None = project.get("analysis")
+    if cached_analysis and isinstance(cached_analysis, dict) and cached_analysis.get("health_score"):
+        logger.info("analyze_pipeline: returning cached analysis for %s", request.project_id)
+        return JSONResponse(content=cached_analysis)
+
     scene_count: int = screenplay.count("INT.") + screenplay.count("EXT.")
     if scene_count == 0:
         scene_count = 1
@@ -278,7 +289,7 @@ async def analyze_pipeline(request: AnalyzeRequest) -> JSONResponse:
 
     result: dict = safe_default
 
-    # Attempt Gemini analysis with one retry
+    # Attempt Groq analysis with one retry
     for attempt in range(2):
         try:
             raw: str = ai_client.generate(prompt, json_mode=True)
@@ -375,9 +386,9 @@ async def moodboard_pipeline(request: MoodboardRequest) -> JSONResponse:
 
 @app.post("/api/translate")
 async def translate_pipeline(request: TranslateRequest) -> JSONResponse:
-    """Regenerate screenplay dialogue in target language using Sarvam AI.
+    """Regenerate screenplay dialogue in target language using Gemini.
 
-    Falls back to the original English screenplay if Sarvam is unavailable.
+    Falls back to the original English screenplay if Gemini is unavailable.
     Action lines and scene headings ALWAYS remain in English.
 
     Args:
@@ -397,47 +408,45 @@ async def translate_pipeline(request: TranslateRequest) -> JSONResponse:
             },
         )
 
-    lang_code: str = _LANG_CODES.get(request.target_language, "hi-IN")
-
-    sarvam_prompt: str = (
-        f"Given this screenplay, regenerate ONLY the dialogue lines in {request.target_language}.\n"
-        f"Rules:\n"
-        f"- Scene headings (INT./EXT. lines): keep in English, unchanged\n"
-        f"- Action/description lines: keep in English, unchanged\n"
-        f"- Character name lines (centered ALL CAPS): keep in English, unchanged\n"
-        f"- Dialogue lines only: regenerate in {request.target_language} capturing the same "
-        f"emotional intent, character voice, and cultural register — do not translate "
-        f"word-for-word, write how a native speaker of that language would actually say it\n"
-        f"Return the complete screenplay with these replacements applied.\n\n"
-        f"SCREENPLAY:\n{screenplay}"
-    )
-
-    # Attempt Sarvam AI
+    # Primary: Sarvam-M with 2-key rotation (both keys tried before failing)
     try:
-        from sarvamai import SarvamAI  # type: ignore[import]
-        client = SarvamAI(api_subscription_key=os.getenv("SARVAM_API_KEY", ""))
-        translated = client.text.translate(
-            input=screenplay,
-            source_language_code="en-IN",
-            target_language_code=lang_code,
+        translated_text: str = ai_client.translate_screenplay_sarvam(
+            screenplay, request.target_language
         )
-        translated_text: str = translated.translated_text
         logger.info(
             "translate_pipeline: Sarvam translated to %s (%d chars)",
-            request.target_language,
-            len(translated_text),
+            request.target_language, len(translated_text),
         )
         return JSONResponse(
             content={
                 "translated_screenplay": translated_text,
                 "language": request.target_language,
-                "note": "Culturally Generated — Not Translated",
+                "note": "Culturally Generated via Sarvam mayura:v1",
             }
         )
     except Exception as sarvam_err:
-        logger.error("translate_pipeline: Sarvam failed: %s", sarvam_err)
+        logger.warning("translate_pipeline: Sarvam exhausted (%s) — falling back to Groq", sarvam_err)
 
-    # Fallback: return original English screenplay
+    # Fallback: Groq (uses the same key pool as generation)
+    try:
+        translated_text = ai_client.translate_screenplay_groq(
+            screenplay, request.target_language
+        )
+        logger.info(
+            "translate_pipeline: Groq translated to %s (%d chars)",
+            request.target_language, len(translated_text),
+        )
+        return JSONResponse(
+            content={
+                "translated_screenplay": translated_text,
+                "language": request.target_language,
+                "note": "Culturally Generated via Groq",
+            }
+        )
+    except Exception as groq_err:
+        logger.error("translate_pipeline: all providers failed: %s", groq_err)
+
+    # Last resort: return original English screenplay
     logger.info("translate_pipeline: returning original English screenplay as fallback")
     return JSONResponse(
         content={
@@ -445,7 +454,7 @@ async def translate_pipeline(request: TranslateRequest) -> JSONResponse:
             "language": request.target_language,
             "note": "Culturally Generated — Not Translated",
             "fallback": True,
-            "error_message": "Sarvam AI unavailable — showing original screenplay",
+            "error_message": "Translation engine unavailable — showing original screenplay",
         }
     )
 

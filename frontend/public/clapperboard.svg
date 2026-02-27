@@ -1,0 +1,70 @@
+<svg viewBox="0 0 300 280" width="300" height="280" fill="none" xmlns="http://www.w3.org/2000/svg" style="overflow: visible">
+  <defs>
+    <pattern id="diagStripes" patternUnits="userSpaceOnUse" width="22" height="22" patternTransform="rotate(-42)">
+      <rect width="11" height="22" fill="#B01C1C" />
+      <rect x="11" width="11" height="22" fill="#0E0C0B" />
+    </pattern>
+    <filter id="boardShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="16" flood-color="#000000" flood-opacity="0.6" />
+    </filter>
+    <clipPath id="barClip">
+      <rect x="0" y="0" width="300" height="42" />
+    </clipPath>
+  </defs>
+
+  <!-- Main body -->
+  <g filter="url(#boardShadow)">
+    <rect x="0" y="42" width="300" height="238" rx="4" fill="#0E0C0B" />
+    <!-- Crimson upper section -->
+    <rect x="0" y="42" width="300" height="130" rx="4" fill="#9B1515" />
+    <!-- Flatten bottom corners of crimson rect -->
+    <rect x="0" y="148" width="300" height="24" fill="#9B1515" />
+    <!-- Cream lower section -->
+    <rect x="0" y="170" width="300" height="110" fill="#1A1713" />
+    <!-- Divider line -->
+    <line x1="0" y1="170" x2="300" y2="170" stroke="#2D2B28" stroke-width="1" />
+    <!-- PRODUCTION label -->
+    <text x="18" y="200" font-family="'Courier Prime', monospace" font-size="13" font-weight="700" fill="#4A4640" letter-spacing="1">PRODUCTION</text>
+    <line x1="18" y1="208" x2="282" y2="208" stroke="#2D2B28" stroke-width="0.8" />
+    <!-- SCENE label -->
+    <text x="18" y="228" font-family="'Courier Prime', monospace" font-size="13" font-weight="700" fill="#4A4640" letter-spacing="1">SCENE</text>
+    <line x1="18" y1="236" x2="282" y2="236" stroke="#2D2B28" stroke-width="0.8" />
+    <!-- Bottom row -->
+    <line x1="0" y1="250" x2="300" y2="250" stroke="#2D2B28" stroke-width="0.8" />
+    <text x="36" y="265" font-family="'Courier Prime', monospace" font-size="11" fill="#3A3835" letter-spacing="1" text-anchor="middle">SCENE</text>
+    <line x1="110" y1="250" x2="110" y2="280" stroke="#2D2B28" stroke-width="0.8" />
+    <text x="150" y="265" font-family="'Courier Prime', monospace" font-size="11" fill="#3A3835" letter-spacing="1" text-anchor="middle">TAKE</text>
+    <line x1="190" y1="250" x2="190" y2="280" stroke="#2D2B28" stroke-width="0.8" />
+    <text x="242" y="265" font-family="'Courier Prime', monospace" font-size="11" fill="#3A3835" letter-spacing="1" text-anchor="middle">ROLL</text>
+  </g>
+
+  <!-- Top attachment bar -->
+  <g clip-path="url(#barClip)" filter="url(#boardShadow)">
+    <rect x="0" y="4" width="300" height="42" fill="#0E0C0B" />
+    <rect x="0" y="4" width="300" height="42" fill="url(#diagStripes)" />
+    <line x1="0" y1="4" x2="300" y2="4" stroke="#1A1816" stroke-width="1" />
+    <line x1="0" y1="46" x2="300" y2="46" stroke="#1A1816" stroke-width="1" />
+  </g>
+
+  <!-- Bolts -->
+  <circle cx="22" cy="25" r="7" fill="#161412" stroke="#2D2B28" stroke-width="1.5" />
+  <line x1="19" y1="25" x2="25" y2="25" stroke="#3A3835" stroke-width="1" />
+  <line x1="22" y1="22" x2="22" y2="28" stroke="#3A3835" stroke-width="1" />
+
+  <circle cx="42" cy="25" r="7" fill="#161412" stroke="#2D2B28" stroke-width="1.5" />
+  <line x1="39" y1="25" x2="45" y2="25" stroke="#3A3835" stroke-width="1" />
+  <line x1="42" y1="22" x2="42" y2="28" stroke="#3A3835" stroke-width="1" />
+
+  <circle cx="62" cy="25" r="7" fill="#161412" stroke="#2D2B28" stroke-width="1.5" />
+  <line x1="59" y1="25" x2="65" y2="25" stroke="#3A3835" stroke-width="1" />
+  <line x1="62" y1="22" x2="62" y2="28" stroke="#3A3835" stroke-width="1" />
+
+  <!-- Clapper arm — resting open at -14 degrees -->
+  <g transform="rotate(-14, 18, 38)">
+    <rect x="18" y="4" width="262" height="34" rx="3" fill="#0E0C0B" />
+    <rect x="18" y="4" width="262" height="34" fill="url(#diagStripes)" />
+    <rect x="18" y="4" width="262" height="34" rx="3" fill="none" stroke="#1A1816" stroke-width="1" />
+    <circle cx="18" cy="21" r="5" fill="#161412" stroke="#2D2B28" stroke-width="1.5" />
+    <circle cx="18" cy="21" r="2" fill="#3A3835" />
+  </g>
+</svg>

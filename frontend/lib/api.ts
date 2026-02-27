@@ -15,7 +15,10 @@ export const generateScreenplay = async (payload: GenerateRequest): Promise<Gene
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
     });
-    if (!res.ok) throw new Error("Failed to generate screenplay");
+    if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || errorData.code || "Failed to generate screenplay");
+    }
     return res.json();
 };
 
@@ -25,7 +28,10 @@ export const analyzeScreenplay = async (payload: AnalyzeRequest): Promise<Analyz
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
     });
-    if (!res.ok) throw new Error("Failed to analyze screenplay");
+    if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || errorData.code || "Failed to analyze screenplay");
+    }
     return res.json();
 };
 
@@ -35,7 +41,10 @@ export const getMoodboard = async (payload: MoodboardRequest): Promise<Moodboard
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
     });
-    if (!res.ok) throw new Error("Failed to fetch moodboard");
+    if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || errorData.code || "Failed to fetch moodboard");
+    }
     return res.json();
 };
 
@@ -45,7 +54,10 @@ export const translateScreenplay = async (payload: TranslateRequest): Promise<Tr
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
     });
-    if (!res.ok) throw new Error("Failed to translate screenplay");
+    if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || errorData.code || "Failed to translate screenplay");
+    }
     return res.json();
 };
 
