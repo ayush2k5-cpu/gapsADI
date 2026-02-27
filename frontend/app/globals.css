@@ -25,7 +25,7 @@
 
   --font-display: "Bebas Neue", sans-serif;
   --font-ui: "Inter", sans-serif;
-  --font-screenplay: "Courier Prime", monospace;
+  --font-screenplay: "Courier Prime", "Noto Sans Devanagari", "Noto Sans Tamil", monospace;
 }
 
 body {

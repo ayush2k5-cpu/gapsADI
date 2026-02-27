@@ -1,10 +1,11 @@
 fastapi
 uvicorn
-google-generativeai
 langchain
 langchain-community
 chromadb
 sentence-transformers
 reportlab
 python-docx
-sarvam-client
+sarvamai
+requests
+python-dotenv

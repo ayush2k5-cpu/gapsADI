@@ -2,7 +2,9 @@ node_modules/
 .next/
 backend/venv/
 backend/__pycache__/
+backend/chroma_db/
 *.pyc
 *.db
 .env
 .DS_Store
+.mcp.json

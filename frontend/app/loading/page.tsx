@@ -16,6 +16,7 @@ const STEPS = [
 export default function Loading() {
     const router = useRouter();
     const [currentStep, setCurrentStep] = useState(0);
+    const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         async function process() {
@@ -54,9 +55,11 @@ export default function Loading() {
                 localStorage.setItem("scriptoria_response_moods", JSON.stringify([m1, m2, m3]));
 
                 router.push("/output");
-            } catch (err) {
+            } catch (err: any) {
                 console.error("Pipeline failed", err);
-                router.push("/");
+                setError(err.message || "Something went wrong while generating...");
+                // Don't redirect immediately so they can see the error
+                setTimeout(() => router.push("/"), 4000);
             }
         }
 
@@ -83,33 +86,45 @@ export default function Loading() {
             {/* Status Text */}
             <div className="mt-[32px] h-[24px]">
                 <AnimatePresence mode="wait">
-                    <motion.div
-                        key={currentStep}
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.3 }}
-                        className="font-display text-[20px] text-text-primary tracking-[0.1em]"
-                    >
-                        {STEPS[currentStep]}
-                    </motion.div>
+                    {error ? (
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            className="font-ui text-[14px] text-pair1-accent bg-pair1-dark/20 px-4 py-2 rounded border border-pair1-dark/40"
+                        >
+                            {error}
+                        </motion.div>
+                    ) : (
+                        <motion.div
+                            key={currentStep}
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.3 }}
+                            className="font-display text-[20px] text-text-primary tracking-[0.1em]"
+                        >
+                            {STEPS[currentStep]}
+                        </motion.div>
+                    )}
                 </AnimatePresence>
             </div>
 
             {/* Step Dots */}
-            <div className="flex gap-[12px] mt-[24px]">
-                {STEPS.map((_, i) => (
-                    <div
-                        key={i}
-                        className={`w-[8px] h-[8px] rounded-full transition-colors duration-300 ${i <= currentStep ? "bg-brand-white border-brand-white" : "bg-border-default border-border-default"
-                            } border`}
-                    />
-                ))}
-            </div>
+            {!error && (
+                <div className="flex gap-[12px] mt-[24px]">
+                    {STEPS.map((_, i) => (
+                        <div
+                            key={i}
+                            className={`w-[8px] h-[8px] rounded-full transition-colors duration-300 ${i <= currentStep ? "bg-brand-white border-brand-white" : "bg-border-default border-border-default"
+                                } border`}
+                        />
+                    ))}
+                </div>
+            )}
 
             {/* Attribution */}
             <div className="absolute bottom-[32px] font-ui text-[11px] text-text-muted tracking-wide text-center w-full">
-                Powered by Gemini · Sarvam AI · Scriptoria RAG
+                Powered by Groq · Sarvam AI · Scriptoria RAG
             </div>
         </div>
     );

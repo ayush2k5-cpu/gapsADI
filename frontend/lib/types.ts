@@ -21,3 +21,7 @@ export interface TranslateRequest { project_id: string; target_language: string 
 export interface TranslateResponse { translated_screenplay: string; language: string; note: string; fallback?: boolean }
 
 export interface ExportRequest { project_id: string; format: "pdf" | "docx" | "txt" }
+
+export interface CBFCRequest { project_id: string }
+export interface CBFCBreakdown { violence: number; sexual_content: number; language: number; drug_references: number; sensitive_themes: number; horror: number }
+export interface CBFCResponse { rating: "U" | "UA" | "A"; confidence: "high" | "medium" | "low"; total_score: number; breakdown: CBFCBreakdown; reasons: string[]; cbfc_criteria: string; scene_count: number }
