@@ -9,3 +9,4 @@ python-docx
 sarvamai
 requests
 python-dotenv
+fastmcp

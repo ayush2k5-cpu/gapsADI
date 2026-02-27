@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "scriptoria": {
+      "command": "C:\\Users\\ayush\\OneDrive\\Desktop\\Hackathon docs\\scriptoria\\backend\\venv\\Scripts\\python.exe",
+      "args": [
+        "C:\\Users\\ayush\\OneDrive\\Desktop\\Hackathon docs\\scriptoria\\backend\\mcp_server.py"
+      ],
+      "env": {}
+    }
+  }
+}
