@@ -7,6 +7,7 @@ Provider split:
   Groq      (1+ keys)        — screenplay generation, AD analysis, character extraction
                                + translation fallback if both Sarvam keys are exhausted
 """
+import base64
 import itertools
 import json
 import logging
@@ -479,3 +480,119 @@ def _extract_characters_regex(screenplay: str) -> list:
     ]
     logger.info("_extract_characters_regex: extracted %d characters", len(characters))
     return characters
+
+
+# ---------------------------------------------------------------------------
+# Character portrait generation — HuggingFace FLUX.1-schnell
+# ---------------------------------------------------------------------------
+
+_HF_PORTRAIT_URL: str = (
+    "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell"
+)
+
+
+def generate_character_portrait(
+    character_name: str,
+    character_role: str,
+    character_bio: str,
+    tone: int,
+) -> str:
+    """Generate a cinematic character portrait via HuggingFace FLUX.1-schnell.
+
+    Constructs a tone-aware prompt, calls the HuggingFace Inference API, and
+    returns a base64 data URL suitable for use in an <img src> attribute.
+
+    Args:
+        character_name: Character's name (ALL CAPS from screenplay).
+        character_role: Role label e.g. PROTAGONIST, ANTAGONIST, SUPPORTING.
+        character_bio: 1-2 sentence character description.
+        tone: Integer 0-100. 0 = mass commercial, 100 = arthouse.
+
+    Returns:
+        Base64 data URL "data:image/jpeg;base64,..." or empty string on any
+        failure (caller renders initials fallback instead).
+    """
+    hf_key: str = os.getenv("HUGGINGFACE_API_KEY", "").strip()
+    if not hf_key:
+        logger.warning("generate_character_portrait: HUGGINGFACE_API_KEY not set — skipping")
+        return ""
+
+    if tone <= 40:
+        style_descriptor: str = (
+            "vibrant colorful mass commercial Indian cinema character portrait"
+        )
+    elif tone <= 70:
+        style_descriptor = "dramatic cinematic character portrait Indian film"
+    else:
+        style_descriptor = (
+            "dark atmospheric arthouse character portrait chiaroscuro lighting"
+        )
+
+    prompt: str = (
+        f"{character_name}, {character_role.lower()} character, "
+        f"{character_bio[:120]}, {style_descriptor}, "
+        f"professional headshot, cinematic lighting, 4K"
+    )
+
+    try:
+        logger.info(
+            "generate_character_portrait: requesting portrait for %s (tone=%d)",
+            character_name,
+            tone,
+        )
+        response = requests.post(
+            _HF_PORTRAIT_URL,
+            headers={"Authorization": f"Bearer {hf_key}"},
+            json={"inputs": prompt, "parameters": {"width": 512, "height": 512}},
+            timeout=60,
+        )
+
+        if response.status_code == 503:
+            logger.warning(
+                "generate_character_portrait: model loading (503) for %s — returning empty",
+                character_name,
+            )
+            return ""
+
+        if response.status_code == 403:
+            logger.error(
+                "generate_character_portrait: 403 Forbidden for %s. TOKEN PERMISSION ERROR: Ensure your HUGGINGFACE_API_KEY has 'Inference' permissions in settings.",
+                character_name,
+            )
+            return ""
+
+        if response.status_code == 429:
+            logger.warning(
+                "generate_character_portrait: rate limited for %s — returning empty",
+                character_name,
+            )
+            return ""
+
+        if not response.ok:
+            logger.error(
+                "generate_character_portrait: HTTP %d for %s — returning empty",
+                response.status_code,
+                character_name,
+            )
+            return ""
+
+        image_bytes: bytes = response.content
+        encoded: str = base64.b64encode(image_bytes).decode("utf-8")
+        data_url: str = f"data:image/jpeg;base64,{encoded}"
+        logger.info(
+            "generate_character_portrait: success for %s (%d bytes)",
+            character_name,
+            len(image_bytes),
+        )
+        return data_url
+
+    except requests.exceptions.Timeout:
+        logger.warning(
+            "generate_character_portrait: timeout for %s — returning empty", character_name
+        )
+        return ""
+    except Exception as exc:
+        logger.error(
+            "generate_character_portrait: unexpected error for %s: %s", character_name, exc
+        )
+        return ""

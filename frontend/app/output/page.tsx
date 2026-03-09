@@ -20,6 +20,8 @@ export default function OutputScreen() {
     const [projectData, setProjectData] = useState<any>(null);
     const [exporting, setExporting] = useState<string | null>(null);
     const [exportError, setExportError] = useState<string | null>(null);
+    const [translatedScript, setTranslatedScript] = useState<string | null>(null);
+    const [translatedLanguage, setTranslatedLanguage] = useState<string | null>(null);
 
     useEffect(() => {
         // Load from local storage for hackathon MVP
@@ -51,6 +53,7 @@ export default function OutputScreen() {
             const blob = await exportScreenplay({
                 project_id: projectData.gen.project_id,
                 format: format as "pdf" | "docx" | "txt",
+                screenplay_override: translatedScript || undefined,
             });
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
@@ -90,7 +93,13 @@ export default function OutputScreen() {
                 </div>
 
                 {/* Right */}
-                <div className="w-[30%] flex justify-end gap-[8px]">
+                <div className="w-[30%] flex flex-col items-end gap-[4px]">
+                    {translatedScript && translatedLanguage && (
+                        <span className="font-ui text-[10px] text-text-muted uppercase tracking-[0.08em]">
+                            EXPORTING: {translatedLanguage}
+                        </span>
+                    )}
+                    <div className="flex gap-[8px]">
                     {(["PDF", "DOCX", "TXT"] as const).map((ext) => {
                         const fmt = ext.toLowerCase();
                         const isLoading = exporting === fmt;
@@ -110,6 +119,7 @@ export default function OutputScreen() {
                             </button>
                         );
                     })}
+                    </div>
                 </div>
             </header>
 
@@ -174,7 +184,11 @@ export default function OutputScreen() {
                         </div>
 
                         <div className={`absolute inset-0 transition-opacity duration-150 p-[24px] overflow-y-auto custom-scrollbar ${activeTab === 1 ? "opacity-100 z-10" : "opacity-0 -z-10"}`}>
-                            <CharactersTab characters={projectData.gen.characters} />
+                            <CharactersTab
+                                characters={projectData.gen.characters}
+                                projectId={projectData.gen.project_id}
+                                tone={projectData.gen.tone ?? 50}
+                            />
                         </div>
 
                         <div className={`absolute inset-0 transition-opacity duration-150 p-[24px] overflow-y-auto custom-scrollbar ${activeTab === 2 ? "opacity-100 z-10" : "opacity-0 -z-10"}`}>
@@ -182,7 +196,14 @@ export default function OutputScreen() {
                         </div>
 
                         <div className={`absolute inset-0 transition-opacity duration-150 p-[24px] overflow-y-auto custom-scrollbar ${activeTab === 3 ? "opacity-100 z-10" : "opacity-0 -z-10"}`}>
-                            <MultilingualTab originalScript={projectData.gen.screenplay} projectId={projectData.gen.project_id} />
+                            <MultilingualTab
+                                originalScript={projectData.gen.screenplay}
+                                projectId={projectData.gen.project_id}
+                                onTranslated={(text, lang) => {
+                                    setTranslatedScript(text);
+                                    setTranslatedLanguage(lang);
+                                }}
+                            />
                         </div>
 
                         <div className={`absolute inset-0 transition-opacity duration-150 p-[24px] overflow-y-auto custom-scrollbar ${activeTab === 4 ? "opacity-100 z-10" : "opacity-0 -z-10"}`}>

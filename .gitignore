@@ -3,8 +3,16 @@ node_modules/
 backend/venv/
 backend/__pycache__/
 backend/chroma_db/
+backend/chroma_db_test/
+chroma_db/
 *.pyc
 *.db
 .env
+.env.local
 .DS_Store
 .mcp.json
+.claude/
+Thumbs.db
+
+# One-off test/scratch scripts
+backend/test_*.py

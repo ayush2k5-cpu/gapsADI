@@ -4,7 +4,8 @@ import {
     MoodboardRequest, MoodboardResponse,
     TranslateRequest, TranslateResponse,
     ExportRequest,
-    CBFCRequest, CBFCResponse
+    CBFCRequest, CBFCResponse,
+    CharacterPortraitsResponse
 } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
@@ -65,6 +66,9 @@ export const exportScreenplay = async (payload: ExportRequest): Promise<Blob> =>
     const formData = new URLSearchParams();
     formData.append("project_id", payload.project_id);
     formData.append("format", payload.format);
+    if (payload.screenplay_override) {
+        formData.append("screenplay_override", payload.screenplay_override);
+    }
 
     const res = await fetch(`${API_URL}/api/export`, {
         method: "POST",
@@ -82,5 +86,15 @@ export const getCBFCRating = async (payload: CBFCRequest): Promise<CBFCResponse>
         body: JSON.stringify(payload)
     });
     if (!res.ok) throw new Error("Failed to get CBFC rating");
+    return res.json();
+};
+
+export const getCharacterPortraits = async (projectId: string, tone: number): Promise<CharacterPortraitsResponse> => {
+    const res = await fetch(`${API_URL}/api/character-portraits`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project_id: projectId, tone })
+    });
+    if (!res.ok) throw new Error("Failed to fetch portraits");
     return res.json();
 };

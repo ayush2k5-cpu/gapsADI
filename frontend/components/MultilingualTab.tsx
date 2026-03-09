@@ -2,7 +2,15 @@ import { useState, useEffect } from "react";
 import ScreenplayViewer from "./ScreenplayViewer";
 import { translateScreenplay } from "@/lib/api";
 
-export default function MultilingualTab({ originalScript, projectId }: { originalScript: string, projectId: string }) {
+export default function MultilingualTab({
+    originalScript,
+    projectId,
+    onTranslated,
+}: {
+    originalScript: string;
+    projectId: string;
+    onTranslated?: (translatedText: string, language: string) => void;
+}) {
     const [viewState, setViewState] = useState<"ORIGINAL" | "TRANSLATED">("ORIGINAL");
     const [translatedScript, setTranslatedScript] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
@@ -31,6 +39,9 @@ export default function MultilingualTab({ originalScript, projectId }: { origina
                 setTranslateError("Translation engine unavailable — showing original screenplay");
             }
             setTranslatedScript(res.translated_screenplay);
+            if (onTranslated && !res.fallback) {
+                onTranslated(res.translated_screenplay, targetLanguage);
+            }
         } catch (err) {
             console.error(err);
             setTranslateError("Translation failed — please try again");

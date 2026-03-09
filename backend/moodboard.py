@@ -51,7 +51,7 @@ def build_moodboard_url(scene_description: str, tone: int, act: int) -> str:
 
     prompt: str = f"{scene_description}, {act_mood}, {style}, film still, 4K, cinematic"
     encoded: str = urllib.parse.quote(prompt)
-    url: str = f"https://image.pollinations.ai/prompt/{encoded}?width=1024&height=576&nologo=true"
+    url: str = f"https://pollinations.ai/p/{encoded}?width=1024&height=576&nologo=true"
 
     logger.info("build_moodboard_url: act=%d tone=%d", act, tone)
     return url

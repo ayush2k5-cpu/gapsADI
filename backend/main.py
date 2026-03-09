@@ -471,12 +471,19 @@ import exporter
 async def export_pipeline(
     project_id: str = Form(...),
     format: str = Form(...),
-):
+    screenplay_override: str = Form(default=""),
+) -> StreamingResponse | JSONResponse:
     """Export the screenplay for project_id as PDF, DOCX, or TXT.
+
+    If screenplay_override is provided (non-empty), it is used directly instead
+    of fetching from the database. This allows the frontend to export a
+    translated screenplay without persisting it to SQLite.
 
     Args:
         project_id: UUID of the project to export.
         format: One of 'pdf', 'docx', or 'txt'.
+        screenplay_override: Optional screenplay text. When non-empty, used
+            directly and the DB lookup is skipped.
 
     Returns:
         StreamingResponse binary file, or JSONResponse error on failure.
@@ -492,16 +499,26 @@ async def export_pipeline(
             },
         )
 
-    screenplay: str | None = db.get_screenplay(project_id)
-    if screenplay is None:
-        return JSONResponse(
-            status_code=400,
-            content={
-                "error": True,
-                "code": "EXPORT_FAILURE",
-                "message": "Project not found",
-            },
+    screenplay: str | None
+    if screenplay_override:
+        screenplay = screenplay_override
+        logger.info(
+            "export_pipeline: using screenplay_override (%d chars) for project_id=%s",
+            len(screenplay_override),
+            project_id,
         )
+    else:
+        screenplay = db.get_screenplay(project_id)
+        if screenplay is None:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": True,
+                    "code": "EXPORT_FAILURE",
+                    "message": "Project not found",
+                },
+            )
+        logger.info("export_pipeline: using DB screenplay for project_id=%s", project_id)
 
     _MEDIA_TYPES: dict[str, str] = {
         "pdf": "application/pdf",
@@ -623,3 +640,70 @@ async def cbfc_pipeline(request: CBFCRequest) -> JSONResponse:
         result.get("confidence"),
     )
     return JSONResponse(content=result)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/character-portraits
+# ---------------------------------------------------------------------------
+
+
+class CharacterPortraitRequest(BaseModel):
+    project_id: str
+    tone: int
+
+
+@app.post("/api/character-portraits")
+async def character_portraits_pipeline(request: CharacterPortraitRequest) -> JSONResponse:
+    """Generate character portrait images for all characters in a project.
+
+    Fetches character data from DB and calls HuggingFace FLUX.1-schnell for
+    each character. Returns {name, image_url} dicts where image_url is a
+    base64 data URL or empty string if generation failed for that character.
+
+    Args:
+        request: CharacterPortraitRequest with project_id and tone (0-100).
+
+    Returns:
+        JSONResponse with portraits list. Never returns 500.
+    """
+    project: dict | None = db.get_project(request.project_id)
+    if project is None:
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": True,
+                "code": "VALIDATION_ERROR",
+                "message": "Project not found",
+            },
+        )
+
+    characters: list = project.get("characters") or []
+    portraits: list[dict] = []
+
+    for char in characters:
+        if not isinstance(char, dict):
+            continue
+        name: str = str(char.get("name", ""))
+        role: str = str(char.get("role", "SUPPORTING"))
+        bio: str = str(char.get("bio", ""))
+        if not name:
+            continue
+
+        try:
+            image_url: str = ai_client.generate_character_portrait(
+                name, role, bio, request.tone
+            )
+        except Exception as exc:
+            logger.error(
+                "character_portraits_pipeline: portrait failed for %s: %s", name, exc
+            )
+            image_url = ""
+
+        portraits.append({"name": name, "image_url": image_url})
+
+    logger.info(
+        "character_portraits_pipeline: project_id=%s generated %d portraits",
+        request.project_id,
+        len(portraits),
+    )
+    return JSONResponse(content={"portraits": portraits})

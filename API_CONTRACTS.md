@@ -334,8 +334,11 @@ No files stored on server.
 
 **Request:** `application/x-www-form-urlencoded`
 ```
-project_id:  string (UUID)
-format:      pdf | docx | txt
+project_id:          string (UUID)
+format:              pdf | docx | txt
+screenplay_override: string (optional) — if non-empty, this text is exported directly
+                     instead of fetching from SQLite. Used by the frontend to export
+                     translated screenplays without persisting them to the database.
 ```
 
 **Response:** Binary file stream
