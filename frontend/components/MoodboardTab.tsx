@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from "framer-motion";
 
 export default function MoodboardTab({ moods }: { moods: any[] }) {
     const [isHovered, setIsHovered] = useState(false);
+    const [imgErrors, setImgErrors] = useState<{ [idx: number]: boolean }>({});
+    const [imgLoaded, setImgLoaded] = useState<{ [idx: number]: boolean }>({});
 
     // If no moods, we could render a skeleton, but for now just wait.
     if (!moods || moods.length === 0) return null;
@@ -38,6 +40,9 @@ export default function MoodboardTab({ moods }: { moods: any[] }) {
                             zIndex: 10 - idx,
                         };
 
+                        const hasError = imgErrors[idx] || !mood.image_url;
+                        const isLoaded = imgLoaded[idx];
+
                         return (
                             <motion.div
                                 key={idx}
@@ -47,12 +52,27 @@ export default function MoodboardTab({ moods }: { moods: any[] }) {
                                     }`}
                             >
                                 <div className="w-full h-[calc(100%-36px)] relative group">
-                                    <img
-                                        src={mood.image_url}
-                                        alt={mood.caption}
-                                        className="w-full h-full object-cover"
-                                        loading="lazy"
-                                    />
+                                    {/* Shimmer while loading */}
+                                    {!isLoaded && !hasError && (
+                                        <div className="absolute inset-0 bg-bg-elevated animate-pulse flex items-center justify-center">
+                                            <span className="font-ui text-[10px] text-text-muted uppercase tracking-widest">Generating...</span>
+                                        </div>
+                                    )}
+                                    {/* Error fallback */}
+                                    {hasError ? (
+                                        <div className="w-full h-full bg-bg-elevated flex items-center justify-center">
+                                            <span className="font-ui text-[10px] text-text-muted uppercase tracking-widest">Visual unavailable</span>
+                                        </div>
+                                    ) : (
+                                        <img
+                                            src={mood.image_url}
+                                            alt={mood.caption}
+                                            className={`w-full h-full object-cover transition-opacity duration-500 ${isLoaded ? "opacity-100" : "opacity-0"}`}
+                                            loading="lazy"
+                                            onLoad={() => setImgLoaded(prev => ({ ...prev, [idx]: true }))}
+                                            onError={() => setImgErrors(prev => ({ ...prev, [idx]: true }))}
+                                        />
+                                    )}
                                     <div className="absolute inset-0 bg-pair2-accent opacity-0 group-hover:opacity-15 transition-opacity duration-300 pointer-events-none" />
                                 </div>
                                 <div className="h-[36px] px-[12px] flex items-center bg-bg-surface border-t border-border-default">

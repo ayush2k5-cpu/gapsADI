@@ -30,15 +30,35 @@ _GROQ_MODEL: str = "llama-3.3-70b-versatile"
 # Key pool
 # ---------------------------------------------------------------------------
 
+_PLACEHOLDER_SUBSTRINGS: tuple[str, ...] = (
+    "your_key_here", "your_key", "placeholder", "changeme", "xxx", "<", ">"
+)
+
+
+def _is_placeholder(key: str) -> bool:
+    """Return True if the key looks like an unfilled template value."""
+    low = key.lower()
+    return any(p in low for p in _PLACEHOLDER_SUBSTRINGS)
+
+
 def _get_groq_keys() -> list[str]:
-    """Collect all GROQ_API_KEY / GROQ_API_KEY_N vars from the environment."""
+    """Collect all GROQ_API_KEY / GROQ_API_KEY_N vars from the environment.
+
+    Silently drops placeholder / empty values so the pool only contains
+    keys that look like real credentials.
+    """
     keys: list[str] = []
     base: str = os.getenv("GROQ_API_KEY", "").strip()
-    if base:
+    if base and not _is_placeholder(base):
         keys.append(base)
+    elif base and _is_placeholder(base):
+        logger.warning(
+            "ai_client: GROQ_API_KEY looks like a placeholder ('%s') — ignoring. "
+            "Set a real key from https://console.groq.com", base[:20]
+        )
     for i in range(1, 10):
         key: str = os.getenv(f"GROQ_API_KEY_{i}", "").strip()
-        if key:
+        if key and not _is_placeholder(key):
             keys.append(key)
     # Deduplicate while preserving order
     seen: set[str] = set()
@@ -55,14 +75,17 @@ _groq_key_iterator = itertools.cycle(GROQ_KEYS) if GROQ_KEYS else None
 
 
 def _get_sarvam_keys() -> list[str]:
-    """Collect all SARVAM_API_KEY / SARVAM_API_KEY_N vars from the environment."""
+    """Collect all SARVAM_API_KEY / SARVAM_API_KEY_N vars from the environment.
+
+    Silently drops placeholder / empty values.
+    """
     keys: list[str] = []
     base: str = os.getenv("SARVAM_API_KEY", "").strip()
-    if base:
+    if base and not _is_placeholder(base):
         keys.append(base)
     for i in range(1, 10):
         key: str = os.getenv(f"SARVAM_API_KEY_{i}", "").strip()
-        if key:
+        if key and not _is_placeholder(key):
             keys.append(key)
     seen: set[str] = set()
     unique: list[str] = []
@@ -103,7 +126,10 @@ def _groq_request(
         RuntimeError: GROQ_ERROR — non-rate-limit failure.
     """
     if not GROQ_KEYS:
-        raise RuntimeError("GROQ_ERROR: No API keys configured — set GROQ_API_KEY_1 in .env")
+        raise RuntimeError(
+            "GROQ_NOT_CONFIGURED: No valid Groq API key found. "
+            "Open backend/.env and set GROQ_API_KEY to your key from https://console.groq.com"
+        )
 
     payload: dict = {
         "model": _GROQ_MODEL,
@@ -140,8 +166,16 @@ def _groq_request(
                     continue
 
                 if resp.status_code == 401:
-                    logger.error("_groq_request: invalid key %s — skipping", censored)
-                    continue
+                    logger.error(
+                        "_groq_request: INVALID key %s (401 Unauthorized). "
+                        "Check your GROQ_API_KEY in backend/.env — get a real key at https://console.groq.com",
+                        censored,
+                    )
+                    # Raise immediately — cycling keys won't help if all are invalid
+                    raise RuntimeError(
+                        "GROQ_INVALID_KEY: Groq rejected your API key (401 Unauthorized). "
+                        "Open backend/.env and paste a valid GROQ_API_KEY from https://console.groq.com"
+                    )
 
                 resp.raise_for_status()
                 text: str = resp.json()["choices"][0]["message"]["content"]
@@ -163,7 +197,10 @@ def _groq_request(
         )
         time.sleep(backoff)
 
-    raise RuntimeError("GROQ_RATE_LIMIT: all keys exhausted after retries")
+    raise RuntimeError(
+        "GROQ_RATE_LIMIT: All Groq keys are rate-limited. "
+        "Wait ~60 seconds and try again, or add more keys as GROQ_API_KEY_2, GROQ_API_KEY_3 in backend/.env"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -419,8 +456,11 @@ def generate_characters(screenplay: str) -> list:
     ]
 
     try:
-        raw: str = _groq_request(messages, json_mode=True, max_tokens=800)
-        parsed: list = json.loads(raw)
+        raw: str = _groq_request(messages, json_mode=True, max_tokens=1200)
+        parsed = json.loads(raw)
+        # Groq sometimes wraps the array: {"characters": [...]}
+        if isinstance(parsed, dict):
+            parsed = parsed.get("characters") or parsed.get("data") or []
         if isinstance(parsed, list) and parsed:
             logger.info("generate_characters: extracted %d characters", len(parsed))
             return parsed
@@ -483,12 +523,8 @@ def _extract_characters_regex(screenplay: str) -> list:
 
 
 # ---------------------------------------------------------------------------
-# Character portrait generation — HuggingFace FLUX.1-schnell
+# Character portrait generation — Pollinations.ai (free, keyless)
 # ---------------------------------------------------------------------------
-
-_HF_PORTRAIT_URL: str = (
-    "https://router.huggingface.co/hf-inference/models/black-forest-labs/FLUX.1-schnell"
-)
 
 
 def generate_character_portrait(
@@ -497,10 +533,11 @@ def generate_character_portrait(
     character_bio: str,
     tone: int,
 ) -> str:
-    """Generate a cinematic character portrait via HuggingFace FLUX.1-schnell.
+    """Generate a cinematic character portrait via Pollinations.ai.
 
-    Constructs a tone-aware prompt, calls the HuggingFace Inference API, and
-    returns a base64 data URL suitable for use in an <img src> attribute.
+    Builds a tone-aware prompt, fetches from Pollinations server-side, and
+    returns a base64 data URL for use in an <img src> attribute.
+    No API key required — Pollinations is free and keyless.
 
     Args:
         character_name: Character's name (ALL CAPS from screenplay).
@@ -509,88 +546,70 @@ def generate_character_portrait(
         tone: Integer 0-100. 0 = mass commercial, 100 = arthouse.
 
     Returns:
-        Base64 data URL "data:image/jpeg;base64,..." or empty string on any
-        failure (caller renders initials fallback instead).
+        Base64 data URL "data:image/jpeg;base64,..." or empty string on failure.
     """
-    hf_key: str = os.getenv("HUGGINGFACE_API_KEY", "").strip()
-    if not hf_key:
-        logger.warning("generate_character_portrait: HUGGINGFACE_API_KEY not set — skipping")
-        return ""
+    import urllib.parse as _urlparse
 
     if tone <= 40:
         style_descriptor: str = (
-            "vibrant colorful mass commercial Indian cinema character portrait"
+            "vibrant Bollywood character portrait, dramatic Indian cinema, rich colors"
         )
     elif tone <= 70:
-        style_descriptor = "dramatic cinematic character portrait Indian film"
+        style_descriptor = (
+            "cinematic Indian film character portrait, dramatic lighting, warm tones"
+        )
     else:
         style_descriptor = (
-            "dark atmospheric arthouse character portrait chiaroscuro lighting"
+            "arthouse character portrait, chiaroscuro lighting, desaturated, psychological"
         )
 
+    bio_snippet: str = character_bio[:100] if character_bio else character_role.lower()
     prompt: str = (
-        f"{character_name}, {character_role.lower()} character, "
-        f"{character_bio[:120]}, {style_descriptor}, "
-        f"professional headshot, cinematic lighting, 4K"
+        f"portrait of {character_name}, {character_role.lower()} character, "
+        f"{bio_snippet}, {style_descriptor}, "
+        f"professional headshot, cinematic, 4K, sharp focus"
+    )
+
+    # Use character name as seed for consistent portrait per character
+    seed: int = abs(hash(character_name)) % 99999
+    encoded_prompt: str = _urlparse.quote(prompt)
+    url: str = (
+        f"https://image.pollinations.ai/prompt/{encoded_prompt}"
+        f"?width=512&height=768&nologo=true&seed={seed}"
     )
 
     try:
         logger.info(
-            "generate_character_portrait: requesting portrait for %s (tone=%d)",
+            "generate_character_portrait: requesting portrait for %s via Pollinations",
             character_name,
-            tone,
         )
-        response = requests.post(
-            _HF_PORTRAIT_URL,
-            headers={"Authorization": f"Bearer {hf_key}"},
-            json={"inputs": prompt, "parameters": {"width": 512, "height": 512}},
-            timeout=60,
-        )
-
-        if response.status_code == 503:
-            logger.warning(
-                "generate_character_portrait: model loading (503) for %s — returning empty",
-                character_name,
-            )
-            return ""
-
-        if response.status_code == 403:
-            logger.error(
-                "generate_character_portrait: 403 Forbidden for %s. TOKEN PERMISSION ERROR: Ensure your HUGGINGFACE_API_KEY has 'Inference' permissions in settings.",
-                character_name,
-            )
-            return ""
-
-        if response.status_code == 429:
-            logger.warning(
-                "generate_character_portrait: rate limited for %s — returning empty",
-                character_name,
-            )
-            return ""
-
-        if not response.ok:
-            logger.error(
-                "generate_character_portrait: HTTP %d for %s — returning empty",
-                response.status_code,
-                character_name,
-            )
-            return ""
-
-        image_bytes: bytes = response.content
-        encoded: str = base64.b64encode(image_bytes).decode("utf-8")
-        data_url: str = f"data:image/jpeg;base64,{encoded}"
-        logger.info(
-            "generate_character_portrait: success for %s (%d bytes)",
-            character_name,
-            len(image_bytes),
-        )
-        return data_url
-
-    except requests.exceptions.Timeout:
-        logger.warning(
-            "generate_character_portrait: timeout for %s — returning empty", character_name
-        )
+        for attempt in range(2):
+            try:
+                response = requests.get(url, timeout=45)
+                if response.ok and response.content:
+                    encoded: str = base64.b64encode(response.content).decode("utf-8")
+                    content_type: str = (
+                        response.headers.get("Content-Type", "image/jpeg")
+                        .split(";")[0].strip()
+                    )
+                    data_url: str = f"data:{content_type};base64,{encoded}"
+                    logger.info(
+                        "generate_character_portrait: success for %s (%d bytes)",
+                        character_name, len(response.content),
+                    )
+                    return data_url
+                else:
+                    logger.warning(
+                        "generate_character_portrait: HTTP %d for %s attempt %d",
+                        response.status_code, character_name, attempt + 1,
+                    )
+            except requests.exceptions.Timeout:
+                logger.warning(
+                    "generate_character_portrait: timeout for %s attempt %d",
+                    character_name, attempt + 1,
+                )
         return ""
+
     except Exception as exc:
         logger.error(
             "generate_character_portrait: unexpected error for %s: %s", character_name, exc

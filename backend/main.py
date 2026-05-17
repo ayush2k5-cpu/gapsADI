@@ -177,13 +177,43 @@ async def generate_pipeline(request: GenerateRequest) -> JSONResponse:
     try:
         screenplay: str = ai_client.generate(prompt)
     except RuntimeError as exc:
-        if "RATE_LIMIT" in str(exc):
+        err = str(exc)
+        if "GROQ_NOT_CONFIGURED" in err:
+            return JSONResponse(
+                status_code=400,
+                content={
+                    "error": True,
+                    "code": "GROQ_NOT_CONFIGURED",
+                    "message": (
+                        "No Groq API key is set. "
+                        "Open backend/.env, set GROQ_API_KEY to a real key from "
+                        "https://console.groq.com, then restart the backend."
+                    ),
+                },
+            )
+        if "GROQ_INVALID_KEY" in err:
+            return JSONResponse(
+                status_code=401,
+                content={
+                    "error": True,
+                    "code": "GROQ_INVALID_KEY",
+                    "message": (
+                        "Your Groq API key was rejected (401 Unauthorized). "
+                        "Open backend/.env, paste a valid GROQ_API_KEY from "
+                        "https://console.groq.com, then restart the backend."
+                    ),
+                },
+            )
+        if "RATE_LIMIT" in err:
             return JSONResponse(
                 status_code=429,
                 content={
                     "error": True,
                     "code": "GROQ_RATE_LIMIT",
-                    "message": "All API keys are rate-limited — please wait a moment and try again",
+                    "message": (
+                        "All API keys are rate-limited — please wait ~60 seconds and try again. "
+                        "You can also add extra keys as GROQ_API_KEY_2, GROQ_API_KEY_3 in backend/.env"
+                    ),
                 },
             )
         return JSONResponse(
@@ -338,15 +368,22 @@ async def analyze_pipeline(request: AnalyzeRequest) -> JSONResponse:
 
 @app.post("/api/moodboard")
 async def moodboard_pipeline(request: MoodboardRequest) -> JSONResponse:
-    """Return a Pollinations.ai image URL and caption for the requested act.
+    """Return a base64-encoded moodboard image and caption for the requested act.
+
+    Fetches the Pollinations.ai image server-side and returns it as a base64
+    data URL so the browser never has to make a cross-origin image request.
 
     Args:
         request: MoodboardRequest with project_id and act (1, 2, or 3).
 
     Returns:
-        JSONResponse with image_url and caption. Never blocks — always returns something.
+        JSONResponse with image_url (base64 data URL or empty string) and caption.
+        Never blocks — always returns something.
     """
-    _ACT_LABELS: dict[int, str] = {1: "ESTABLISH", 2: "ESCALATE", 3: "RESOLVE"}
+    import base64 as _b64
+    import requests as _req
+
+    _ACT_LABELS: dict[int, str] = {1: "ACT 1 — ESTABLISH", 2: "ACT 2 — ESCALATE", 3: "ACT 3 — RESOLVE"}
 
     project: dict | None = None
     try:
@@ -366,17 +403,47 @@ async def moodboard_pipeline(request: MoodboardRequest) -> JSONResponse:
         tone = 50
 
     try:
-        image_url: str = moodboard_module.build_moodboard_url(scene_description, tone, request.act)
+        pollinations_url: str = moodboard_module.build_moodboard_url(
+            scene_description, tone, request.act
+        )
     except Exception as exc:
         logger.error("moodboard_pipeline: URL build failed: %s", exc)
-        image_url = (
-            "https://image.pollinations.ai/prompt/cinematic+dark+film+still"
-            "?width=1024&height=576&nologo=true"
+        pollinations_url = (
+            f"https://image.pollinations.ai/prompt/cinematic+dark+film+still"
+            f"?width=1024&height=576&nologo=true&seed={request.act}"
         )
 
-    caption: str = f"ACT {request.act} — {_ACT_LABELS.get(request.act, 'VISUAL DIRECTION')}"
+    # Fetch image server-side and return as base64 data URL
+    image_data_url: str = ""
+    for attempt in range(2):  # 2 attempts — Pollinations can be slow on first call
+        try:
+            logger.info(
+                "moodboard_pipeline: fetching act=%d attempt=%d from %s",
+                request.act, attempt + 1, pollinations_url[:80]
+            )
+            img_resp = _req.get(pollinations_url, timeout=45)
+            if img_resp.ok and img_resp.content:
+                content_type = img_resp.headers.get("Content-Type", "image/jpeg").split(";")[0].strip()
+                encoded = _b64.b64encode(img_resp.content).decode("utf-8")
+                image_data_url = f"data:{content_type};base64,{encoded}"
+                logger.info(
+                    "moodboard_pipeline: act=%d fetched OK (%d bytes)", request.act, len(img_resp.content)
+                )
+                break  # success — stop retrying
+            else:
+                logger.warning(
+                    "moodboard_pipeline: Pollinations HTTP %d for act=%d attempt=%d",
+                    img_resp.status_code, request.act, attempt + 1
+                )
+        except Exception as fetch_exc:
+            logger.error(
+                "moodboard_pipeline: fetch failed act=%d attempt=%d: %s",
+                request.act, attempt + 1, fetch_exc
+            )
 
-    return JSONResponse(content={"image_url": image_url, "caption": caption})
+    caption: str = _ACT_LABELS.get(request.act, f"ACT {request.act} — VISUAL DIRECTION")
+
+    return JSONResponse(content={"image_url": image_data_url, "caption": caption})
 
 
 # ---------------------------------------------------------------------------
