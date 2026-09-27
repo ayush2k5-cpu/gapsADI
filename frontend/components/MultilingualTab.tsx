@@ -16,6 +16,7 @@ export default function MultilingualTab({
     const [isLoading, setIsLoading] = useState(false);
     const [translateError, setTranslateError] = useState<string | null>(null);
     const [targetLanguage, setTargetLanguage] = useState("Hindi");
+    const [translateNote, setTranslateNote] = useState("Culturally Generated — Not Translated · Sarvam AI");
 
     useEffect(() => {
         // Attempt to load language requested from landing page
@@ -37,6 +38,9 @@ export default function MultilingualTab({
             const res = await translateScreenplay({ project_id: projectId, target_language: targetLanguage });
             if (res.fallback) {
                 setTranslateError("Translation engine unavailable — showing original screenplay");
+            }
+            if (res.note) {
+                setTranslateNote(res.note);
             }
             setTranslatedScript(res.translated_screenplay);
             if (onTranslated && !res.fallback) {
@@ -104,7 +108,7 @@ export default function MultilingualTab({
             </div>
 
             <div className="text-center w-full font-ui text-[10px] text-text-muted pb-2 border-t border-border-default pt-4">
-                Culturally Generated — Not Translated · Sarvam AI
+                {translateNote}
             </div>
         </div>
     );

@@ -3,6 +3,7 @@ main.py — FastAPI application for Scriptoria.
 All 5 endpoints: /api/generate, /api/analyze, /api/moodboard, /api/translate, /api/export
 Never return a raw 500 to the frontend. Always catch and return structured error JSON.
 """
+import asyncio
 import io
 import json
 import logging
@@ -413,33 +414,36 @@ async def moodboard_pipeline(request: MoodboardRequest) -> JSONResponse:
             f"?width=1024&height=576&nologo=true&seed={request.act}"
         )
 
-    # Fetch image server-side and return as base64 data URL
-    image_data_url: str = ""
-    for attempt in range(2):  # 2 attempts — Pollinations can be slow on first call
-        try:
-            logger.info(
-                "moodboard_pipeline: fetching act=%d attempt=%d from %s",
-                request.act, attempt + 1, pollinations_url[:80]
-            )
-            img_resp = _req.get(pollinations_url, timeout=45)
-            if img_resp.ok and img_resp.content:
-                content_type = img_resp.headers.get("Content-Type", "image/jpeg").split(";")[0].strip()
-                encoded = _b64.b64encode(img_resp.content).decode("utf-8")
-                image_data_url = f"data:{content_type};base64,{encoded}"
+    def _fetch_moodboard_image() -> str:
+        # Runs off the event loop via asyncio.to_thread — requests.get() blocks otherwise.
+        for attempt in range(2):  # 2 attempts — Pollinations can be slow on first call
+            try:
                 logger.info(
-                    "moodboard_pipeline: act=%d fetched OK (%d bytes)", request.act, len(img_resp.content)
+                    "moodboard_pipeline: fetching act=%d attempt=%d from %s",
+                    request.act, attempt + 1, pollinations_url[:80]
                 )
-                break  # success — stop retrying
-            else:
-                logger.warning(
-                    "moodboard_pipeline: Pollinations HTTP %d for act=%d attempt=%d",
-                    img_resp.status_code, request.act, attempt + 1
+                img_resp = _req.get(pollinations_url, timeout=45)
+                if img_resp.ok and img_resp.content:
+                    content_type = img_resp.headers.get("Content-Type", "image/jpeg").split(";")[0].strip()
+                    encoded = _b64.b64encode(img_resp.content).decode("utf-8")
+                    logger.info(
+                        "moodboard_pipeline: act=%d fetched OK (%d bytes)", request.act, len(img_resp.content)
+                    )
+                    return f"data:{content_type};base64,{encoded}"
+                else:
+                    logger.warning(
+                        "moodboard_pipeline: Pollinations HTTP %d for act=%d attempt=%d",
+                        img_resp.status_code, request.act, attempt + 1
+                    )
+            except Exception as fetch_exc:
+                logger.error(
+                    "moodboard_pipeline: fetch failed act=%d attempt=%d: %s",
+                    request.act, attempt + 1, fetch_exc
                 )
-        except Exception as fetch_exc:
-            logger.error(
-                "moodboard_pipeline: fetch failed act=%d attempt=%d: %s",
-                request.act, attempt + 1, fetch_exc
-            )
+        return ""
+
+    # Fetch image server-side and return as base64 data URL
+    image_data_url: str = await asyncio.to_thread(_fetch_moodboard_image)
 
     caption: str = _ACT_LABELS.get(request.act, f"ACT {request.act} — VISUAL DIRECTION")
 
@@ -757,8 +761,10 @@ async def character_portraits_pipeline(request: CharacterPortraitRequest) -> JSO
             continue
 
         try:
-            image_url: str = ai_client.generate_character_portrait(
-                name, role, bio, request.tone
+            # Runs off the event loop via asyncio.to_thread — the Pollinations
+            # fetch inside generate_character_portrait() blocks otherwise.
+            image_url: str = await asyncio.to_thread(
+                ai_client.generate_character_portrait, name, role, bio, request.tone
             )
         except Exception as exc:
             logger.error(
@@ -774,3 +780,9 @@ async def character_portraits_pipeline(request: CharacterPortraitRequest) -> JSO
         len(portraits),
     )
     return JSONResponse(content={"portraits": portraits})
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

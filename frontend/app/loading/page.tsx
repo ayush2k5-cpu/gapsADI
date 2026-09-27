@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { generateScreenplay, analyzeScreenplay, getMoodboard } from "@/lib/api";
@@ -17,8 +17,14 @@ export default function Loading() {
     const router = useRouter();
     const [currentStep, setCurrentStep] = useState(0);
     const [error, setError] = useState<string | null>(null);
+    const hasStarted = useRef(false);
 
     useEffect(() => {
+        // Guards against React Strict Mode's dev-only double-invoke of this
+        // effect, which otherwise fires the whole generate pipeline twice.
+        if (hasStarted.current) return;
+        hasStarted.current = true;
+
         async function process() {
             // Small delay for initial animation
             await new Promise(r => setTimeout(r, 1000));
