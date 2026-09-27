@@ -16,3 +16,7 @@ Thumbs.db
 
 # One-off test/scratch scripts
 backend/test_*.py
+
+# Graphify local knowledge-graph output (regenerated; canonical copy lives in
+# Ojas vault/graph-imports/gapsADI/)
+graphify-out/
