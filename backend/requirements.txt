@@ -10,3 +10,7 @@ python-docx
 sarvamai
 requests
 python-dotenv
+pytest
+pytest-mock
+pytest-asyncio
+httpx

@@ -24,7 +24,7 @@ logging.basicConfig(level=logging.INFO)
 logger: logging.Logger = logging.getLogger(__name__)
 
 _GROQ_URL: str = "https://api.groq.com/openai/v1/chat/completions"
-_GROQ_MODEL: str = "llama-3.3-70b-versatile"
+_GROQ_MODEL: str = "qwen/qwen3.8-27b"
 
 # ---------------------------------------------------------------------------
 # Key pool
