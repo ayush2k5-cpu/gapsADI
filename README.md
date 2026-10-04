@@ -8,6 +8,8 @@
 
 This project is split into two parts: a **Python/FastAPI backend** and a **Next.js frontend**. You will need to run *both* to fully experience the application.
 
+To start both servers in one go, run `start-gapsadi.bat`.
+
 ### Prerequisites
 
 - Node.js (v18+)
